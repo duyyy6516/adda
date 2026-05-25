@@ -42,7 +42,7 @@ DANH_SACH_CAY = {
 }
 plant_list_keys = list(DANH_SACH_CAY.keys())
 
-# Khởi tạo Session State vững chắc
+# Khởi tạo Session State vững chắc - Token & Chat ID được cố định tại đây
 CHAU_HINH_MAC_DINH = {
     "temp": 0.0, "rh": 0.0, "countdown": 15,
     "is_running": False, "is_completed": False, "history": [],
@@ -166,11 +166,6 @@ def render_sidebar_controls():
         v_range = DANH_SACH_CAY[opt] if opt != "🛠️ Tùy chỉnh thủ công ngưỡng riêng" else st.session_state.vpd_range_val
         vpd_sc = st.slider("Khoảng tối ưu (kPa):", 0.0, 3.0, v_range, 0.1, disabled=st.session_state.is_running or (opt != "🛠️ Tùy chỉnh thủ công ngưỡng riêng"))
         st.session_state.vpd_range_val = vpd_sc
-        
-    with st.container(border=True):
-        st.markdown("<p style='font-size:14px;font-weight:bold;margin-bottom:2px;'>🔔 Cấu hình Telegram Bot</p>", unsafe_allow_html=True)
-        st.session_state.tele_token_input = st.text_input("Bot Token:", value=st.session_state.tele_token_input, type="password", disabled=st.session_state.is_running)
-        st.session_state.tele_chat_id_input = st.text_input("Chat ID:", value=st.session_state.tele_chat_id_input, disabled=st.session_state.is_running)
 
     # Khung giám sát thời gian thực bên trái
     run_interval = 1 if st.session_state.is_running else 999999
