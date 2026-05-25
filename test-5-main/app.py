@@ -117,7 +117,7 @@ def trigger_new_data(v_min, v_max):
     t_token = st.session_state.tele_token_input
     t_chat_id = st.session_state.tele_chat_id_input
     if t_token and t_chat_id:
-        sol = get_quick_solution(new_vpd, v_min, v_max, cur_sim.hour, t_val, h_val)
+        sol = get_quick_solution(new_vpd, v_min, v_max, cur_sim.hour)
         u_days = sorted(list(set([r["Ngày"] for r in st.session_state.history])), reverse=True)
         lat_day = u_days[0] if u_days else day_str
         hist_lat = [r for r in st.session_state.history if r["Ngày"] == lat_day]
@@ -129,7 +129,7 @@ def trigger_new_data(v_min, v_max):
             f"⏰ {day_str} - {cur_sim.strftime('%H:%M')}\n"
             f"📊 Môi trường: {t_val}°C | {h_val}%\n\n"
             f"**1️⃣ Hiện trạng:** **{new_vpd:.2f} kPa** — {tele_status}\n"
-            f"**2️⃣ Chẩn đoán & Biện pháp:**\n*{sol}*\n\n"
+            f"**2️⃣ Biện pháp:** *{sol}*\n"
             f"**3️⃣ Dự báo:** {pfx}*{trend}*"
         )
         send_telegram_message(t_token, t_chat_id, msg)
@@ -159,7 +159,7 @@ def draw_combined_temp_humidity_chart(df):
     )
     temp_chart = alt.layer(temp_line, temp_points)
 
-    # Lớp biểu đồ đường Độ ẩm
+    # Lớp biểu đồ đường Độ ẩm (Sử dụng trục Y độc lập nằm bên phải thông qua .resolve_scale)
     humi_line = alt.Chart(df).mark_line(color='#0068C9', strokeWidth=2.5).encode(
         x=x_axis,
         y=alt.Y(field='Độ ẩm (%)', type='quantitative', title='Độ ẩm (%)', scale=alt.Scale(domain=[0, 100]))
@@ -171,7 +171,7 @@ def draw_combined_temp_humidity_chart(df):
     )
     humi_chart = alt.layer(humi_line, humi_points)
 
-    # Gộp lồng hai biểu đồ dựa trên hai trục độc lập
+    # Gộp lồng hai biểu đồ dựa trên hai trục độc lập (Dual-axis Chart)
     combined = alt.layer(temp_chart, humi_chart).resolve_scale(
         y='independent'
     ).properties(height=220).interactive().configure_axis(labelAngle=0)
@@ -236,10 +236,7 @@ def render_sidebar_controls():
                 if t_tp == "danger_red": st.markdown(f"<div class='danger-box-red'>🚨 {trnd}</div>", unsafe_allow_html=True)
                 elif t_tp == "danger_blue": st.markdown(f"<div class='danger-box-blue'>🚨 {trnd}</div>", unsafe_allow_html=True)
                 st.markdown(f"**VPD:** <span style='color:{color};font-weight:bold;font-size:16px;'>{v_res:.2f} kPa</span> ({lbl})", unsafe_allow_html=True)
-                
-                # Gọi hàm dịch vụ cải tiến truyền đủ T và RH để nhận biết nguyên nhân chi tiết
-                sol_msg = get_quick_solution(v_res, v_min, v_max, c_sim.hour, st.session_state.temp, st.session_state.rh)
-                st.markdown(f"**Biện pháp:** _{sol_msg}_")
+                st.markdown(f"**Biện pháp:** _{get_quick_solution(v_res, v_min, v_max, c_sim.hour)}_")
                 if t_tp not in ["danger_red", "danger_blue"]: st.markdown(f"**Dự báo:** {trnd}")
     live_monitor()
 
@@ -260,14 +257,15 @@ def render_realtime_analytics_panel():
     df_f = df_all[df_all["Ngày"] == sel_day].iloc[::-1].copy()
     v_min, v_max = st.session_state.vpd_range_val
 
+    # --- ĐỔI BỐ CỤC THEO THỨ TỰ THẲNG ĐỨNG YÊU CẦU ---
     st.markdown("---")
     st.markdown("#### 📈 BIỂU ĐỒ TRỰC QUAN")
     
-    # 1. Biểu đồ VPD
+    # 1. Biểu đồ chỉ số VPD trên cùng
     st.markdown("##### 🎯 Chỉ số VPD (kPa)")
     st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
     
-    # 2. Biểu đồ lồng nhau Nhiệt & Ẩm nằm ngay bên dưới
+    # 2. Biểu đồ Nhiệt độ vs Độ ẩm lồng nhau nằm ngay bên dưới
     st.markdown("##### 🌡️ Biến động Nhiệt độ (°C) & 💧 Độ ẩm (%) lồng nhau")
     st.altair_chart(draw_combined_temp_humidity_chart(df_f), use_container_width=True)
     
@@ -276,7 +274,7 @@ def render_realtime_analytics_panel():
     st.markdown("#### 📊 THỐNG KÊ THEO BUỔI")
     st.dataframe(analyze_day_by_blocks_rt(st.session_state.history, v_min, v_max, sel_day), use_container_width=True, hide_index=True)
     
-    # 4. Nhật ký số liệu ở dưới cùng
+    # 4. Nhật ký số liệu chi tiết nằm ở dưới cùng
     st.markdown("---")
     st.markdown("#### 📋 NHẬT KÝ SỐ LIỆU CHI TIẾT")
     df_f["Thời gian"] = df_f["Hiển thị Giờ"]
@@ -403,7 +401,7 @@ with tab_past:
             df_p["Ngày"] = "Dữ liệu File"
             df_p["Trạng thái"] = df_p["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < f_min else ("✅ Lý tưởng" if x <= f_max else "🚨 Quá khô"))
             
-            # --- KHỐI THỐNG KÊ FILE ---
+            # --- KHỐI THỐNG KÊ FILE (KPIs) ---
             st.markdown("<div style='margin-top:15px;margin-bottom:5px;font-weight:bold;color:#1A5276;'>📊 TỔNG QUAN CHU KỲ GỘP (FILE)</div>", unsafe_allow_html=True)
             mc1, mc2, mc3, mc4 = st.columns(4)
             mc1.markdown(f"<div class='metric-card-upload'><span>📈 VPD TB CHU KỲ</span><br><b style='font-size:18px;color:#2E7D32;'>{df_p['VPD (kPa)'].mean():.2f} kPa</b></div>", unsafe_allow_html=True)
@@ -420,7 +418,7 @@ with tab_past:
             if str_res["wet_hours"] > 4.0: sc_r.warning(f"🟦 **Stress Ẩm:** Tích tụ ẩm cao liên tục **{str_res['wet_hours']} giờ**.")
             else: sc_r.success(f"✅ **Áp lực ẩm:** An toàn ({str_res['wet_hours']} giờ).")
 
-            # --- BỐ CỤC ĐỒ THỊ FILE THEO THỨ TỰ TRÊN XUỐNG ---
+            # --- BỐ CỤC ĐỒ THỊ VÀ NHẬT KÝ FILE (CŨNG THEO THỨ TỰ TRÊN XUỐNG) ---
             st.markdown("---")
             st.markdown("#### 📊 BÁO CÁO CHI TIẾT FILE")
             
@@ -447,9 +445,7 @@ with tab_past:
                 b_sum = df_f_blk.groupby("Buổi").agg({"Nhiệt độ (°C)": "mean", "Độ ẩm (%)": "mean", "VPD_raw": "mean"}).reindex(["🌅 Sáng (05h - 10h)", "☀️ Trưa (10h - 15h)", "🌇 Chiều (15h - 19h)", "🌌 Tối (19h - 23h)", "🌙 Khuya (23h - 05h)"]).dropna(how="all").reset_index()
                 b_sum.columns = ["Khoảng thời gian", "Nhiệt độ TB (°C)", "Độ ẩm TB (%)", "VPD TB (kPa)"]
                 for c in ["Nhiệt độ TB (°C)", "Độ ẩm TB (%)", "VPD TB (kPa)"]: b_sum[c] = b_sum[c].round(2)
-                
-                # Cập nhật đánh giá theo buổi động dựa trên giá trị VPD trung bình của buổi
-                b_sum["Đánh giá"] = b_sum.apply(lambda r: get_quick_solution(r["VPD TB (kPa)"], f_min, f_max, 12, r["Nhiệt độ TB (°C)"], r["Độ ẩm TB (%)"]), axis=1)
+                b_sum["Đánh giá"] = b_sum["VPD TB (kPa)"].apply(lambda x: "🟦 Quá ẩm" if x < f_min else ("🟩 Lý tưởng" if x <= f_max else "🟥 Quá khô"))
                 st.dataframe(b_sum, use_container_width=True, hide_index=True)
                 
             # 4. Nhật ký số liệu file dưới cùng
