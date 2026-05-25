@@ -1,22 +1,37 @@
-def get_quick_solution(vpd: float, vpd_min: float, vpd_max: float, hour: int, temp: float = 25.0, rh: float = 70.0) -> str:
-    """
-    Trả về nguyên nhân cụ thể và giải pháp xử lý vi khí hậu chuyên sâu
-    dựa trên tổ hợp các thông số VPD, Nhiệt độ (Temp) và Độ ẩm (RH).
-    """
-    # TRƯỜNG HỢP 1: LÝ TƯỞNG
-    if vpd_min <= vpd <= vpd_max:
-        return "Môi trường hoàn hảo. Duy trì trạng thái hiện tại của nhà kính."
+import requests
 
-    # TRƯỜNG HỢP 2: LÀM KHÔ / QUÁ KHÔ (VPD CAO)
+def send_telegram_message(bot_token: str, chat_id: str, message: str) -> bool:
+    """
+    Gửi thông báo cảnh báo VPD qua Telegram Bot API
+    """
+    if not bot_token or not chat_id:
+        return False
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "Markdown"
+        }
+        response = requests.post(url, json=payload, timeout=10)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+def get_quick_solution(vpd: float, vpd_min: float, vpd_max: float, hour: int) -> str:
+    """
+    Trả về giải pháp xử lý vi khí hậu nhanh dựa trên giá trị VPD và mốc thời gian
+    """
+    if vpd < vpd_min:
+        if 6 <= hour <= 17:
+            return "Trời ẩm - Ban ngày: Bật quạt đối lưu, mở bạt mái thông gió, dừng phun sương."
+        else:
+            return "Trời ẩm - Ban đêm: Bật quạt gió, kích hoạt hệ thống sưởi nâng nhiệt nhẹ nếu cần."
+    
     elif vpd > vpd_max:
-        if temp > 28.0:
-            return "Do KHÔNG KHÍ QUÁ NÓNG (T tăng cao vọt). Giải pháp: Kéo lưới cắt nắng (giảm 50-70% bức xạ), bật phun sương mịn áp suất cao hoặc hệ thống Cooling Pad, mở tối đa bạt mái/bạt hông để thông gió hạ nhiệt."
+        if 10 <= hour <= 15:
+            return "Trời khô - Trưa nắng gắt: Kéo lưới cắt nắng, bật phun sương làm mát mịn áp suất cao."
         else:
-            return "Do GIÓ HOẶC KHÔNG KHÍ HANH KHÔ (RH tụt sâu). Giải pháp: Bật phun sương bù ẩm theo chu kỳ ngắn (Phun 30s, nghỉ 3p), khép bớt bạt hông hướng đón gió chính để giữ ẩm, tăng nhẹ lưu lượng tưới nhỏ giọt."
-
-    # TRƯỜNG HỢP 3: QUÁ ẨM (VPD THẤP)
-    else:
-        if temp < 18.0:
-            return "Do LẠNH TÍCH TỤ ẨM (Nhiệt độ sụt giảm mạnh). Giải pháp: Đóng kín bạt mái và bạt hông giữ nhiệt ban đêm, bật quạt đối lưu tầm cao để xua sương muối/khí lạnh, kích hoạt đèn sưởi/lò đốt nâng nhiệt nhẹ."
-        else:
-            return "Do KHÔNG KHÍ BỊ KẸT ẨM (Đứng gió, thoát hơi lá tụ tụ). Giải pháp: Ngắt ngay phun sương, mở bạt mái thông gió (Top-vent) xả ẩm, bật quạt thông gió hướng ra ngoài và quạt đối lưu làm khô bề mặt lá."
+            return "Trời khô - Giờ thấp điểm: Bật phun sương boong, tưới bù ẩm nhẹ cho nền sàn."
+            
+    return "Môi trường hoàn hảo: Duy trì trạng thái thông thoáng hiện tại cho nhà kính."
