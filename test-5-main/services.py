@@ -1,19 +1,20 @@
 import requests
 
-def send_discord_message(webhook_url: str, message: str) -> bool:
+def send_telegram_message(bot_token: str, chat_id: str, message: str) -> bool:
     """
-    Gửi thông báo cảnh báo VPD qua Discord Webhook
+    Gửi thông báo cảnh báo VPD qua Telegram Bot API
     """
-    if not webhook_url:
+    if not bot_token or not chat_id:
         return False
     try:
-        # Chuyển đổi một số định dạng Markdown của Telegram sang định dạng tương thích với Discord
-        # Discord sử dụng ** để viết đậm (giống Telegram) nhưng không hỗ trợ ghi kiểu *chữ_nghiêng* lồng phức tạp
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         payload = {
-            "content": message
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "Markdown"
         }
-        response = requests.post(webhook_url, json=payload, timeout=10)
-        return response.status_code in [200, 204]
+        response = requests.post(url, json=payload, timeout=10)
+        return response.status_code == 200
     except Exception:
         return False
 
