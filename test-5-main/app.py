@@ -4,7 +4,6 @@ import json
 from datetime import datetime, timedelta
 import sys
 import os
-import altair as alt
 
 # Tự động tìm kiếm module ở thư mục hiện tại
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -18,7 +17,11 @@ try:
         predict_vpd_trend_v3, 
         calculate_plant_stress_hours
     )
-    from charts import draw_vpd_chart
+    from charts import (
+        draw_temperature_chart, 
+        draw_humidity_chart, 
+        draw_vpd_chart
+    )
 except ModuleNotFoundError as e:
     st.error(f"❌ Không tìm thấy module bổ trợ: {e.name}")
     st.stop()
@@ -39,7 +42,7 @@ DANH_SACH_CAY = {
 }
 plant_list_keys = list(DANH_SACH_CAY.keys())
 
-# Khởi tạo Session State vững chắc - Token & Chat ID được cố định chạy ngầm
+# Khởi tạo Session State vững chắc - Token & Chat ID được cố định tại đây
 CHAU_HINH_MAC_DINH = {
     "temp": 0.0, "rh": 0.0, "countdown": 15,
     "is_running": False, "is_completed": False, "history": [],
@@ -140,45 +143,7 @@ def trigger_new_data(v_min, v_max):
         st.session_state.is_completed = True   
     st.session_state.simulated_time = nxt_sim.strftime("%Y-%m-%d %H:%M:%S")
 
-def draw_combined_temp_humidity_chart(df):
-    """Vẽ biểu đồ lồng nhau gồm Nhiệt độ (Trục Y bên trái) và Độ ẩm (Trục Y bên phải)"""
-    if df.empty:
-        return alt.Chart(pd.DataFrame()).mark_blank()
-    
-    x_axis = alt.X(field='Hiển thị Giờ', type='ordinal', title='Mốc thời gian', sort=None)
-    
-    # Lớp biểu đồ đường Nhiệt độ
-    temp_line = alt.Chart(df).mark_line(color='#FF4B4B', strokeWidth=2.5).encode(
-        x=x_axis,
-        y=alt.Y(field='Nhiệt độ (°C)', type='quantitative', title='Nhiệt độ (°C)', scale=alt.Scale(zero=False))
-    )
-    temp_points = alt.Chart(df).mark_circle(color='#B71C1C', size=50).encode(
-        x=x_axis,
-        y=alt.Y(field='Nhiệt độ (°C)', type='quantitative'),
-        tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
-    )
-    temp_chart = alt.layer(temp_line, temp_points)
-
-    # Lớp biểu đồ đường Độ ẩm (Sử dụng trục Y độc lập nằm bên phải thông qua .resolve_scale)
-    humi_line = alt.Chart(df).mark_line(color='#0068C9', strokeWidth=2.5).encode(
-        x=x_axis,
-        y=alt.Y(field='Độ ẩm (%)', type='quantitative', title='Độ ẩm (%)', scale=alt.Scale(domain=[0, 100]))
-    )
-    humi_points = alt.Chart(df).mark_circle(color='#0D47A1', size=50).encode(
-        x=x_axis,
-        y=alt.Y(field='Độ ẩm (%)', type='quantitative'),
-        tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
-    )
-    humi_chart = alt.layer(humi_line, humi_points)
-
-    # Gộp lồng hai biểu đồ dựa trên hai trục độc lập (Dual-axis Chart)
-    combined = alt.layer(temp_chart, humi_chart).resolve_scale(
-        y='independent'
-    ).properties(height=220).interactive().configure_axis(labelAngle=0)
-    
-    return combined
-
-# --- THÀNH PHẦN GIAO DIỆN CHÍNH ---
+# --- PHÂN TÁCH CÁC THÀNH PHẦN GIAO DIỆN CHÍNH ---
 def render_sidebar_controls():
     st.markdown("<h3 style='color:#2E7D32;font-size:18px;'>🤖 TRẠM ĐIỀU HÀNH</h3>", unsafe_allow_html=True)
     with st.container(border=True):
@@ -257,28 +222,20 @@ def render_realtime_analytics_panel():
     df_f = df_all[df_all["Ngày"] == sel_day].iloc[::-1].copy()
     v_min, v_max = st.session_state.vpd_range_val
 
-    # --- ĐỔI BỐ CỤC THEO THỨ TỰ THẲNG ĐỨNG YÊU CẦU ---
-    st.markdown("---")
-    st.markdown("#### 📈 BIỂU ĐỒ TRỰC QUAN")
-    
-    # 1. Biểu đồ chỉ số VPD trên cùng
-    st.markdown("##### 🎯 Chỉ số VPD (kPa)")
-    st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
-    
-    # 2. Biểu đồ Nhiệt độ vs Độ ẩm lồng nhau nằm ngay bên dưới
-    st.markdown("##### 🌡️ Biến động Nhiệt độ (°C) & 💧 Độ ẩm (%) lồng nhau")
-    st.altair_chart(draw_combined_temp_humidity_chart(df_f), use_container_width=True)
-    
-    # 3. Thống kê theo buổi
-    st.markdown("---")
-    st.markdown("#### 📊 THỐNG KÊ THEO BUỔI")
-    st.dataframe(analyze_day_by_blocks_rt(st.session_state.history, v_min, v_max, sel_day), use_container_width=True, hide_index=True)
-    
-    # 4. Nhật ký số liệu chi tiết nằm ở dưới cùng
-    st.markdown("---")
-    st.markdown("#### 📋 NHẬT KÝ SỐ LIỆU CHI TIẾT")
-    df_f["Thời gian"] = df_f["Hiển thị Giờ"]
-    st.dataframe(df_f[["STT", "Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
+    t1, t2, t3 = st.tabs(["📈 Biểu đồ", "📊 Thống kê buổi", "📋 Nhật ký số liệu"])
+    with t1:
+        st.markdown("##### 🎯 Chỉ số VPD (kPa)")
+        st.altair_chart(draw_vpd_chart(df_f, v_min, v_max), use_container_width=True)
+        sc1, sc2 = st.columns(2)
+        sc1.markdown("##### 🌡️ Nhiệt độ (°C)")
+        sc1.altair_chart(draw_temperature_chart(df_f), use_container_width=True)
+        sc2.markdown("##### 💧 Độ ẩm (%)")
+        sc2.altair_chart(draw_humidity_chart(df_f), use_container_width=True)
+    with t2:
+        st.dataframe(analyze_day_by_blocks_rt(st.session_state.history, v_min, v_max, sel_day), use_container_width=True, hide_index=True)
+    with t3:
+        df_f["Thời gian"] = df_f["Hiển thị Giờ"]
+        st.dataframe(df_f[["STT", "Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
 
 # --- KHỞI CHẠY KHÔNG GIAN GIAO DIỆN TABS CHÍNH ---
 tab_future, tab_past = st.tabs(["🔮 XEM DỰ BÁO & THEO DÕI TƯƠNG LAI", "📁 TẢI FILE & PHÂN TÍCH LỊCH SỬ"])
@@ -401,8 +358,8 @@ with tab_past:
             df_p["Ngày"] = "Dữ liệu File"
             df_p["Trạng thái"] = df_p["VPD (kPa)"].apply(lambda x: "⚠️ Quá ẩm" if x < f_min else ("✅ Lý tưởng" if x <= f_max else "🚨 Quá khô"))
             
-            # --- KHỐI THỐNG KÊ FILE (KPIs) ---
-            st.markdown("<div style='margin-top:15px;margin-bottom:5px;font-weight:bold;color:#1A5276;'>📊 TỔNG QUAN CHU KỲ GỘP (FILE)</div>", unsafe_allow_html=True)
+            # --- KHỐI THỐNG KÊ (KPIs) ---
+            st.markdown("<div style='margin-top:15px;margin-bottom:5px;font-weight:bold;color:#1A5276;'>📊 TỔNG QUAN CHU KỲ GỘP</div>", unsafe_allow_html=True)
             mc1, mc2, mc3, mc4 = st.columns(4)
             mc1.markdown(f"<div class='metric-card-upload'><span>📈 VPD TB CHU KỲ</span><br><b style='font-size:18px;color:#2E7D32;'>{df_p['VPD (kPa)'].mean():.2f} kPa</b></div>", unsafe_allow_html=True)
             mc2.markdown(f"<div class='metric-card-upload'><span>🌡️ NHIỆT ĐỘ TB</span><br><b style='font-size:18px;color:#FF4B4B;'>{df_p['Nhiệt độ (°C)'].mean():.1f} °C</b></div>", unsafe_allow_html=True)
@@ -418,21 +375,27 @@ with tab_past:
             if str_res["wet_hours"] > 4.0: sc_r.warning(f"🟦 **Stress Ẩm:** Tích tụ ẩm cao liên tục **{str_res['wet_hours']} giờ**.")
             else: sc_r.success(f"✅ **Áp lực ẩm:** An toàn ({str_res['wet_hours']} giờ).")
 
-            # --- BỐ CỤC ĐỒ THỊ VÀ NHẬT KÝ FILE (CŨNG THEO THỨ TỰ TRÊN XUỐNG) ---
+            # --- VẼ ĐỒ THỊ FILE VÀ BẢNG SỐ LIỆU ---
+            rl, rr = st.columns([6.2, 3.8])
+            with rl:
+                st.markdown("#### 📊 BIỂU ĐỒ CHU KỲ PHÂN TẦNG")
+                st.markdown("##### 🎯 Chỉ số VPD (kPa)")
+                st.altair_chart(draw_vpd_chart(df_p, f_min, f_max), use_container_width=True)
+                sfc1, sfc2 = st.columns(2)
+                sfc1.markdown("##### 🌡️ Nhiệt độ (°C)")
+                sfc1.altair_chart(draw_temperature_chart(df_p), use_container_width=True)
+                sfc2.markdown("##### 💧 Độ ẩm (%)")
+                sfc2.altair_chart(draw_humidity_chart(df_p), use_container_width=True)
+            with rr:
+                st.markdown("##### 📋 NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ")
+                df_tc = df_p[["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].copy()
+                for c in ["Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)"]: df_tc[c] = df_tc[c].apply(lambda x: f"{float(x):.2f}")
+                st.dataframe(df_tc.style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True, height=290)
+                st.download_button("📥 Xuất báo cáo chu kỳ (.csv)", data=df_p.to_csv(index=False).encode('utf-8'), file_name="vpd_report.csv", mime="text/csv", use_container_width=True)
+
+            # --- BÁO CÁO THEO BUỔI ---
             st.markdown("---")
-            st.markdown("#### 📊 BÁO CÁO CHI TIẾT FILE")
-            
-            # 1. VPD file
-            st.markdown("##### 🎯 Chỉ số VPD (kPa)")
-            st.altair_chart(draw_vpd_chart(df_p, f_min, f_max), use_container_width=True)
-            
-            # 2. Nhiệt & Ẩm file lồng nhau
-            st.markdown("##### 🌡️ Biến động Nhiệt độ (°C) & 💧 Độ ẩm (%) lồng nhau (File)")
-            st.altair_chart(draw_combined_temp_humidity_chart(df_p), use_container_width=True)
-            
-            # 3. Thống kê buổi file
-            st.markdown("---")
-            st.markdown("##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ")
+            st.markdown("##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc)")
             if len(df_f_blk) > 0:
                 df_f_blk["Hour"] = df_f_blk["datetime_internal"].dt.hour
                 def b_assign(h):
@@ -447,14 +410,5 @@ with tab_past:
                 for c in ["Nhiệt độ TB (°C)", "Độ ẩm TB (%)", "VPD TB (kPa)"]: b_sum[c] = b_sum[c].round(2)
                 b_sum["Đánh giá"] = b_sum["VPD TB (kPa)"].apply(lambda x: "🟦 Quá ẩm" if x < f_min else ("🟩 Lý tưởng" if x <= f_max else "🟥 Quá khô"))
                 st.dataframe(b_sum, use_container_width=True, hide_index=True)
-                
-            # 4. Nhật ký số liệu file dưới cùng
-            st.markdown("---")
-            st.markdown("##### 📋 NHẬT KÝ THEO DÕI ĐIỂM GỘP CHU KỲ")
-            df_tc = df_p[["Hiển thị Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].copy()
-            for c in ["Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)"]: df_tc[c] = df_tc[c].apply(lambda x: f"{float(x):.2f}")
-            st.dataframe(df_tc.style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True, height=290)
-            st.download_button("📥 Xuất báo cáo chu kỳ (.csv)", data=df_p.to_csv(index=False).encode('utf-8'), file_name="vpd_report.csv", mime="text/csv", use_container_width=True)
-
         except Exception as file_err:
             st.error(f"❌ Lỗi xử lý file: {str(file_err)}")
