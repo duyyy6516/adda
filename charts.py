@@ -55,9 +55,10 @@ def draw_temperature_chart(df):
     
     x_axis = alt.X(field='Hiển thị Giờ', type='ordinal', title='Mốc thời gian', sort=None)
     
+    # Sửa tiêu đề trục Y thành tiêu đề chung để chuẩn bị gộp lớp
     line = alt.Chart(df).mark_line(color='#FF4B4B', strokeWidth=2.5).encode(
         x=x_axis,
-        y=alt.Y(field='Nhiệt độ (°C)', type='quantitative', title='Nhiệt độ (°C)')
+        y=alt.Y(field='Nhiệt độ (°C)', type='quantitative', title='Nhiệt độ (°C) / Độ ẩm (%)')
     )
     
     points = alt.Chart(df).mark_circle(color='#B71C1C', size=60).encode(
@@ -66,7 +67,7 @@ def draw_temperature_chart(df):
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
     )
     
-    return alt.layer(line, points).properties(height=180).interactive().configure_axis(labelAngle=0)
+    return alt.layer(line, points)
 
 
 def draw_humidity_chart(df):
@@ -75,9 +76,10 @@ def draw_humidity_chart(df):
     
     x_axis = alt.X(field='Hiển thị Giờ', type='ordinal', title='Mốc thời gian', sort=None)
     
+    # Bỏ title ở đây để khi chồng lớp nó không đè chữ lên trục bên trái
     line = alt.Chart(df).mark_line(color='#0068C9', strokeWidth=2.5).encode(
         x=x_axis,
-        y=alt.Y(field='Độ ẩm (%)', type='quantitative', title='Độ ẩm (%)')
+        y=alt.Y(field='Độ ẩm (%)', type='quantitative', title=None)
     )
     
     points = alt.Chart(df).mark_circle(color='#0D47A1', size=60).encode(
@@ -86,4 +88,4 @@ def draw_humidity_chart(df):
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
     )
     
-    return alt.layer(line, points).properties(height=180).interactive().configure_axis(labelAngle=0)
+    return alt.layer(line, points)
