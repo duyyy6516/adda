@@ -91,15 +91,14 @@ def draw_humidity_chart(df):
 
 def draw_combined_temp_humidity_chart(df):
     """
-    Gộp biểu đồ Nhiệt độ và Độ ẩm lồng nhau sử dụng cấu trúc hai trục Y song song độc lập (Dual Axis)
-    Xuất phát từ phía bên trái dải đồ thị toàn cục.
+    Gộp biểu đồ Nhiệt độ và Độ ẩm lồng nhau (Dual Axis) xuất phát từ trục bên trái
     """
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
 
     x_axis = alt.X(field='Hiển thị Giờ', type='ordinal', title='Mốc thời gian', sort=None)
 
-    # Lớp đồ thị Nhiệt độ (Trục Y bên trái mặc định)
+    # Đường và điểm cho Nhiệt độ (Trục Y bên trái)
     base_temp = alt.Chart(df).encode(x=x_axis)
     line_temp = base_temp.mark_line(color='#FF4B4B', strokeWidth=2.5).encode(
         y=alt.Y(field='Nhiệt độ (°C)', type='quantitative', title='Nhiệt độ (°C)', axis=alt.Axis(titleColor='#FF4B4B'))
@@ -110,7 +109,7 @@ def draw_combined_temp_humidity_chart(df):
     )
     chart_temp = alt.layer(line_temp, points_temp)
 
-    # Lớp đồ thị Độ ẩm (Trục Y độc lập)
+    # Đường và điểm cho Độ ẩm (Trục Y bên phải song song độc lập)
     base_humidity = alt.Chart(df).encode(x=x_axis)
     line_humidity = base_humidity.mark_line(color='#0068C9', strokeWidth=2.5).encode(
         y=alt.Y(field='Độ ẩm (%)', type='quantitative', title='Độ ẩm (%)', axis=alt.Axis(titleColor='#0068C9'))
@@ -121,7 +120,7 @@ def draw_combined_temp_humidity_chart(df):
     )
     chart_humidity = alt.layer(line_humidity, points_humidity)
 
-    # Gộp lồng nhau kết hợp độc lập trục Y
+    # Kết hợp hai đồ thị lồng nhau với hai trục độc lập
     combined = alt.independent_charts(
         chart_temp + chart_humidity,
         y='independent'
