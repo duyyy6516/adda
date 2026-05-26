@@ -64,6 +64,37 @@ st.sidebar.markdown("### 🔔 Tích hợp Cảnh báo Telegram")
 bot_token = st.sidebar.text_input("Telegram Bot Token:", type="password", help="Nhập token nhận từ BotFather")
 chat_id = st.sidebar.text_input("Telegram Chat ID:", help="ID nhóm hoặc ID cá nhân nhận tin nhắn")
 
+# --- XỬ LÝ NHẬP FILE CẤU HÌNH QUÁ KHỨ (LOG FILE) ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📂 Khôi phục chu kỳ từ Tệp nhật ký")
+uploaded_file = st.sidebar.file_uploader("Tải lên file dữ liệu JSON lịch sử:", type=["json"])
+
+if uploaded_file is not None and not st.session_state.is_running:
+    try:
+        raw_data = json.load(uploaded_file)
+        parsed_history = []
+        for item in raw_data:
+            # Chuyển đổi chuỗi ngược lại thành datetime nội bộ an toàn
+            dt_obj = datetime.strptime(item["Thời điểm (Mô phỏng)"], "%d/%m/%Y %H:%M")
+            parsed_history.append({
+                "Thời điểm (Mô phỏng)": item["Thời điểm (Mô phỏng)"],
+                "datetime_internal": dt_obj,
+                "Nhiệt độ (°C)": float(item["Nhiệt độ (°C)"]),
+                "Độ ẩm (%)": float(item["Độ ẩm (%)"]),
+                "VPD (kPa)": float(item["VPD (kPa)"]),
+                "VPD_raw": float(item.get("VPD_raw", item["VPD (kPa)"])),
+                "Trạng thái": item["Trạng thái"],
+                "Hiển thị Giờ": dt_obj.strftime("%H:%M")
+            })
+        # Sắp xếp lịch sử theo thời gian mới nhất lên đầu
+        parsed_history.sort(key=lambda x: x["datetime_internal"], reverse=True)
+        st.session_state.history = parsed_history
+        if parsed_history:
+            st.session_state.sim_time = parsed_history[0]["datetime_internal"]
+        st.sidebar.success(f"✅ Đã đồng bộ thành công {len(parsed_history)} mốc chu kỳ lịch sử!")
+    except Exception as e:
+        st.sidebar.error(f"❌ Định dạng file lỗi hoặc không khớp cấu trúc chỉ số: {e}")
+
 # Tiêu đề giao diện chính
 st.markdown("<h2 style='text-align: center; color: #2E7D32;'>🌿 Hệ Thống Phân Tích & Giám Sát Chỉ Số VPD Farm</h2>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #555;'>Mô phỏng thời gian thực nâng cao theo chu kỳ khí hậu Đà Lạt - Quét lỗi treo cảm biến & Báo cáo tổng hợp</p>", unsafe_allow_html=True)
@@ -191,7 +222,7 @@ if st.session_state.history:
         quick_sol = get_quick_solution(cur_data['VPD (kPa)'], vpd_min, vpd_max, cur_data['datetime_internal'].hour)
         st.markdown(f"💡 **Khuyến nghị vận hành:** {quick_sol}")
 
-    # 3. ĐỒ THỊ TRỰC QUAN HÓA (Xếp dạng hàng ngang)
+    # 3. ĐỒ THỊ TRỰC QUAN HÓA (Đã đổi từ 3 đồ thị rời sang 2 đồ thị: Gộp + VPD mục tiêu)
     st.markdown("---")
     st.markdown("### 📉 Đồ thị theo dõi Biến động Dữ liệu Lịch sử")
     
@@ -206,57 +237,70 @@ if st.session_state.history:
         st.markdown("<p style='text-align: center; font-weight: bold; color: #2E7D32;'>Biểu đồ Dải An Toàn VPD Mục Tiêu</p>", unsafe_allow_html=True)
         st.altair_chart(draw_vpd_chart(df_chart_source, vpd_min, vpd_max), use_container_width=True)
 
-    # 4. KHỐI HIỂN THỊ TUẦN TỰ (Đã bỏ st.tabs để gộp hiển thị thẳng xuống dưới đồ thị)
+    # 4. KHỐI HIỂN THỊ BẢNG BIỂU TUẦN TỰ XẾP BÊN DƯỚI ĐỒ THỊ
+    # Chuẩn bị dữ liệu xử lý chu kỳ cho thuật toán
     df_f_blk = pd.DataFrame(st.session_state.history)
 
     # --- BÁO CÁO THEO BUỔI ---
     st.markdown("---")
     st.markdown("##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc)")
-    if len(df_f_blk) > 0:
-        df_f_blk["Hour"] = df_f_blk["datetime_internal"].dt.hour
-        def b_assign(h):
-            if 5 <= h < 10: 
-                return "🌅 Sáng (05h - 10h)"
-            if 10 <= h < 15: 
-                return "☀️ Trưa (10h - 15h)"
-            if 15 <= h < 19: 
-                return "🌇 Chiều (15h - 19h)"
-            if 19 <= h < 23: 
-                return "🌌 Tối (19h - 23h)"
-            return "🌙 Khuya (23h - 05h)"
-            
-        df_f_blk["Buổi"] = df_f_blk["Hour"].apply(b_assign)
-        b_sum = df_f_blk.groupby("Buổi").agg({"Nhiệt độ (°C)": "mean", "Độ ẩm (%)": "mean", "VPD_raw": "mean"}).reindex(["🌅 Sáng (05h - 10h)", "☀️ Trưa (10h - 15h)", "🌇 Chiều (15h - 19h)", "🌌 Tối (19h - 23h)", "🌙 Khuya (23h - 05h)"]).dropna()
-        
-        blk_report = []
-        for b_name, b_row in b_sum.iterrows():
-            av_t = round(b_row["Nhiệt độ (°C)"], 1)
-            av_h = round(b_row["Độ ẩm (%)"], 1)
-            av_v = round(b_row["VPD_raw"], 2)
-            if av_v < vpd_min:
-                stt = "⚠️ Quá ẩm"
-            elif av_v > vpd_max:
-                stt = "⚠️ Quá khô"
-            else:
-                stt = "✅ Lý tưởng"
-            blk_report.append({"Buổi": b_name, "Nhiệt độ TB (°C)": av_t, "Độ ẩm TB (%)": av_h, "VPD Trung bình (kPa)": av_v, "Đánh giá trạng thái": stt})
-        
-        if blk_report:
-            st.dataframe(pd.DataFrame(blk_report), use_container_width=True, hide_index=True)
-        else:
-            st.info("Chưa đủ dữ liệu phân đoạn để lập báo cáo chu kỳ.")
+    
+    # Gọi hàm xử lý phân đoạn từ module analytics của bạn để tính toán chính xác
+    blk_report = analyze_day_by_blocks_rt(df_f_blk, vpd_min, vpd_max)
+    if blk_report:
+        st.dataframe(pd.DataFrame(blk_report), use_container_width=True, hide_index=True)
     else:
-        st.info("Chưa có dữ liệu để tổng hợp.")
+        st.info("Chưa có đủ dữ liệu phân đoạn theo mốc giờ chu kỳ để lập báo cáo tổng hợp.")
 
-    # --- NHẬT KÝ SỐ LIỆU LỊCH SỬ ---
+    # --- NHẬT KÝ SỐ LIỆU LỊCH SỬ CHI TIẾT ---
     st.markdown("---")
     st.markdown("##### 📝 NHẬT KÝ SỐ LIỆU LỊCH SỬ CHI TIẾT (Bảng dữ liệu thô)")
+    
     df_display = pd.DataFrame(st.session_state.history)
     if not df_display.empty:
         df_display_clean = df_display[["Thời điểm (Mô phỏng)", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]]
         st.dataframe(df_display_clean, use_container_width=True, hide_index=True)
+        
+        # --- KHỐI TẢI XUẤT FILE NÂNG CAO ---
+        col_down1, col_down2 = st.columns(2)
+        with col_down1:
+            # Tạo file sao lưu cấu hình dạng JSON
+            clean_json_list = []
+            for _, r in df_display.iterrows():
+                clean_json_list.append({
+                    "Thời điểm (Mô phỏng)": r["Thời điểm (Mô phỏng)"],
+                    "Nhiệt độ (°C)": float(r["Nhiệt độ (°C)"]),
+                    "Độ ẩm (%)": float(r["Độ ẩm (%)"]),
+                    "VPD (kPa)": float(r["VPD (kPa)"]),
+                    "VPD_raw": float(r["VPD_raw"]),
+                    "Trạng thái": r["Trạng thái"]
+                })
+            json_str = json.dumps(clean_json_list, indent=4, ensure_ascii=False)
+            st.download_button(
+                label="📥 Tải tệp sao lưu dữ liệu (.JSON)",
+                data=json_str,
+                file_name=f"vpd_history_backup_{datetime.now().strftime('%d%m%Y_%H%M')}.json",
+                mime="application/json",
+                use_container_width=True
+            )
+        with col_down2:
+            try:
+                import io
+                output_buffer = io.BytesIO()
+                with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
+                    df_display_clean.to_excel(writer, index=False, sheet_name='VPD_Report_Data')
+                excel_data = output_buffer.getvalue()
+                st.download_button(
+                    label="📥 Xuất bảng báo cáo số liệu (.XLSX)",
+                    data=excel_data,
+                    file_name=f"vpd_farm_report_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"Không thể tạo file excel kết xuất: {e}")
     else:
-        st.info("Nhật ký trống. Vui lòng bấm cập nhật dữ liệu mô phỏng.")
+        st.info("Nhật ký trống. Vui lòng bấm cập nhật dữ liệu mô phỏng để ghi nhận nhật ký.")
 
 else:
     st.info("👋 Chào mừng bạn đến với hệ thống quản lý VPD. Hãy bấm nút **'Chạy / Cập nhật mốc tiếp theo'** ở phía trên để bắt đầu mô phỏng và phân tích dữ liệu!")
