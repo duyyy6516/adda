@@ -1,9 +1,7 @@
 import requests
 
 def send_telegram_message(bot_token: str, chat_id: str, message: str) -> bool:
-    """
-    Gửi thông báo cảnh báo VPD qua Telegram Bot API
-    """
+    """Gửi thông báo cảnh báo VPD qua Telegram Bot API"""
     if not bot_token or not chat_id:
         return False
     try:
@@ -19,9 +17,7 @@ def send_telegram_message(bot_token: str, chat_id: str, message: str) -> bool:
         return False
 
 def get_quick_solution(vpd: float, vpd_min: float, vpd_max: float, hour: int) -> str:
-    """
-    Trả về giải pháp xử lý vi khí hậu nhanh dựa trên giá trị VPD và mốc thời gian
-    """
+    """Trả về giải pháp xử lý vi khí hậu nhanh dựa trên giá trị VPD và mốc thời gian"""
     if vpd < vpd_min:
         if 6 <= hour <= 17:
             return "Trời ẩm - Ban ngày: Bật quạt đối lưu, mở bạt mái thông gió, dừng phun sương."
@@ -32,6 +28,6 @@ def get_quick_solution(vpd: float, vpd_min: float, vpd_max: float, hour: int) ->
         if 10 <= hour <= 15:
             return "Trời khô - Trưa nắng gắt: Kéo lưới cắt nắng, bật phun sương làm mát mịn áp suất cao."
         else:
-            return "Trời khô - Giờ thấp điểm: Bật phun sương boong, tưới bù ẩm nhẹ cho nền sàn."
+            return "Trời khô - Thấp điểm: Tưới thêm gốc, đóng bớt cửa gió để giữ ẩm màng."
             
-    return "Môi trường hoàn hảo: Duy trì trạng thái thông thoáng hiện tại cho nhà kính."
+    return "Khí hậu lý tưởng - Tiếp tục duy trì chế độ tự động của nhà màng."
