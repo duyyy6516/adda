@@ -5,10 +5,8 @@ from datetime import datetime, timedelta
 import sys
 import os
 
-# Tự động tìm kiếm module ở thư mục hiện tại
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Import các module nội bộ với xử lý ngoại lệ
 try:
     from calculations import calculate_vpd, get_weather_by_time
     from services import send_telegram_message, get_quick_solution
@@ -25,10 +23,9 @@ except ModuleNotFoundError as e:
     st.error(f"❌ Không tìm thấy module bổ trợ: {e.name}")
     st.stop()
 
-# --- CẤU HÌNH BAN ĐẦU ---
 st.set_page_config(page_title="VPD Farm Analytics", page_icon="🌿", layout="wide")
 
-# CẤU TRÚC NGƯỠNG VPD ĐỘNG THEO THỜI ĐIỂM (Sáng, Trưa, Chiều, Đêm)
+# CẤU TRÚC NGƯỠNG VPD ĐỘNG THEO THỜI ĐIỂM
 DANH_SACH_CAY = {
     "🍓 Dâu tây Đà Lạt (Hoa / Trái)": {
         "Sang": (0.6, 0.9), "Trua": (0.8, 1.2), "Chieu": (0.7, 1.0), "Dem": (0.4, 0.7)
@@ -60,11 +57,12 @@ DANH_SACH_CAY = {
 }
 plant_list_keys = list(DANH_SACH_CAY.keys())
 
-# Khởi tạo Session State
+# Khởi tạo Session State (Thêm cấu hình giờ động cho các buổi)
 CHAU_HINH_MAC_DINH = {
     "temp": 24.0, "rh": 75.0, "countdown": 15,
     "is_running": False, "is_completed": False, "history": [],
     "stt_counter": 0, "plant_idx": 0,
+    "h_sang": 5, "h_trua": 10, "h_chieu": 15, "h_dem": 19, # Mốc giờ cấu hình mặc định
     "custom_sang": (0.6, 1.1), "custom_trua": (0.8, 1.4), "custom_chieu": (0.7, 1.2), "custom_dem": (0.5, 0.9),
     "simulated_time": "2026-05-24 07:00:00", "file_plant_idx": 0,
     "file_custom_sang": (0.6, 1.1), "file_custom_trua": (0.8, 1.4), "file_custom_chieu": (0.7, 1.2), "file_custom_dem": (0.5, 0.9),
@@ -75,7 +73,6 @@ for key, val in CHAU_HINH_MAC_DINH.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
-# Nhúng CSS tối ưu giao diện gọn gàng
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"] { overflow-y: auto !important; scroll-behavior: smooth; }
@@ -87,19 +84,24 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- HÀM BỔ TRỢ ĐỊNH TUYẾN THỜI GIAN THEO SINH LÝ CÂY ---
+# --- HÀM ĐỊNH TUYẾN THEO MỐC GIỜ ĐỘNG NGƯỜI DÙNG CHỌN ---
 def get_time_block_key(hour):
-    if 5 <= hour < 10:
+    hs = st.session_state.h_sang
+    ht = st.session_state.h_trua
+    hc = st.session_state.h_chieu
+    hd = st.session_state.h_dem
+    
+    # Kiểm tra vòng xoay giờ sinh học của cây
+    if hs <= hour < ht:
         return "Sang"
-    elif 10 <= hour < 15:
+    elif ht <= hour < hc:
         return "Trua"
-    elif 15 <= hour < 19:
+    elif hc <= hour < hd:
         return "Chieu"
     else:
         return "Dem"
 
 def get_current_vpd_range(plant_name, hour, is_file=False):
-    """Lấy ngưỡng (min, max) tương ứng với loại cây và khung giờ được chọn"""
     if plant_name == "🛠️ Tùy chỉnh thủ công ngưỡng riêng":
         pfx = "file_custom_" if is_file else "custom_"
         blk = get_time_block_key(hour).lower()
@@ -193,7 +195,6 @@ def trigger_new_data():
         st.session_state.is_completed = True   
     st.session_state.simulated_time = nxt_sim.strftime("%Y-%m-%d %H:%M:%S")
 
-# --- PHÂN TÁCH CÁC THÀNH PHẦN GIAO DIỆN CHÍNH ---
 def render_sidebar_controls():
     st.markdown("<h3 style='color:#2E7D32;font-size:18px;'>🤖 TRẠM ĐIỀU HÀNH</h3>", unsafe_allow_html=True)
     with st.container(border=True):
@@ -210,6 +211,15 @@ def render_sidebar_controls():
                 st.session_state.is_running = False
                 st.rerun()
                 
+    # KHỐI ĐIỀU CHỈNH KHOẢNG THỜI GIAN ĐỘNG
+    with st.sidebar:
+        st.markdown("<h3 style='color:#1A5276;font-size:16px;'>⏱️ CẤU HÌNH KHUNG GIỜ BUỔI</h3>", unsafe_allow_html=True)
+        st.session_state.h_sang = st.slider("Bắt đầu Sáng (h):", 4, 8, st.session_state.h_sang)
+        st.session_state.h_trua = st.slider("Bắt đầu Trưa (h):", 9, 12, st.session_state.h_trua)
+        st.session_state.h_chieu = st.slider("Bắt đầu Chiều (h):", 13, 17, st.session_state.h_chieu)
+        st.session_state.h_dem = st.slider("Bắt đầu Đêm (h):", 18, 22, st.session_state.h_dem)
+        st.caption(f"📌 Khung hiện tại: Sáng ({st.session_state.h_sang}h-{st.session_state.h_trua}h) | Trưa ({st.session_state.h_trua}h-{st.session_state.h_chieu}h) | Chiều ({st.session_state.h_chieu}h-{st.session_state.h_dem}h) | Đêm ({st.session_state.h_dem}h-{st.session_state.h_sang}h)")
+
     with st.container(border=True):
         opt = st.selectbox("Cây trồng mô phỏng:", plant_list_keys, index=st.session_state.plant_idx, disabled=st.session_state.is_running)
         st.session_state.plant_idx = plant_list_keys.index(opt)
@@ -220,16 +230,16 @@ def render_sidebar_controls():
         st.markdown(f"⏱️ Khung giờ hiện tại: **{current_block}**")
         
         if opt == "🛠️ Tùy chỉnh thủ công ngưỡng riêng":
-            st.session_state.custom_sang = st.slider("Ngưỡng Sáng (5h-10h):", 0.0, 3.0, st.session_state.custom_sang, 0.1, disabled=st.session_state.is_running)
-            st.session_state.custom_trua = st.slider("Ngưỡng Trưa (10h-15h):", 0.0, 3.0, st.session_state.custom_trua, 0.1, disabled=st.session_state.is_running)
-            st.session_state.custom_chieu = st.slider("Ngưỡng Chiều (15h-19h):", 0.0, 3.0, st.session_state.custom_chieu, 0.1, disabled=st.session_state.is_running)
-            st.session_state.custom_dem = st.slider("Ngưỡng Đêm (19h-5h):", 0.0, 3.0, st.session_state.custom_dem, 0.1, disabled=st.session_state.is_running)
+            st.session_state.custom_sang = st.slider("Ngưỡng Sáng:", 0.0, 3.0, st.session_state.custom_sang, 0.1, disabled=st.session_state.is_running)
+            st.session_state.custom_trua = st.slider("Ngưỡng Trưa:", 0.0, 3.0, st.session_state.custom_trua, 0.1, disabled=st.session_state.is_running)
+            st.session_state.custom_chieu = st.slider("Ngưỡng Chiều:", 0.0, 3.0, st.session_state.custom_chieu, 0.1, disabled=st.session_state.is_running)
+            st.session_state.custom_dem = st.slider("Ngưỡng Đêm:", 0.0, 3.0, st.session_state.custom_dem, 0.1, disabled=st.session_state.is_running)
         else:
             tree = DANH_SACH_CAY[opt]
-            st.caption(f"🌅 Sáng (05h-10h): {tree['Sang'][0]} - {tree['Sang'][1]} kPa")
-            st.caption(f"☀️ Trưa (10h-15h): {tree['Trua'][0]} - {tree['Trua'][1]} kPa")
-            st.caption(f"🌇 Chiều (15h-19h): {tree['Chieu'][0]} - {tree['Chieu'][1]} kPa")
-            st.caption(f"🌙 Đêm (19h-05h): {tree['Dem'][0]} - {tree['Dem'][1]} kPa")
+            st.caption(f"🌅 Sáng: {tree['Sang'][0]} - {tree['Sang'][1]} kPa")
+            st.caption(f"☀️ Trưa: {tree['Trua'][0]} - {tree['Trua'][1]} kPa")
+            st.caption(f"🌇 Chiều: {tree['Chieu'][0]} - {tree['Chieu'][1]} kPa")
+            st.caption(f"🌙 Đêm: {tree['Dem'][0]} - {tree['Dem'][1]} kPa")
 
     @st.fragment(run_every=(1 if st.session_state.is_running else None))
     def live_monitor():
@@ -324,10 +334,10 @@ with tab_past:
             st.session_state.file_plant_idx = plant_list_keys.index(f_opt)
             
             if f_opt == "🛠️ Tùy chỉnh thủ công ngưỡng riêng":
-                st.session_state.file_custom_sang = st.slider("File - Sáng (5h-10h):", 0.0, 3.0, st.session_state.file_custom_sang, 0.1)
-                st.session_state.file_custom_trua = st.slider("File - Trưa (10h-15h):", 0.0, 3.0, st.session_state.file_custom_trua, 0.1)
-                st.session_state.file_custom_chieu = st.slider("File - Chiều (15h-19h):", 0.0, 3.0, st.session_state.file_custom_chieu, 0.1)
-                st.session_state.file_custom_dem = st.slider("File - Đêm (19h-5h):", 0.0, 3.0, st.session_state.file_custom_dem, 0.1)
+                st.session_state.file_custom_sang = st.slider("File - Sáng:", 0.0, 3.0, st.session_state.file_custom_sang, 0.1)
+                st.session_state.file_custom_trua = st.slider("File - Trưa:", 0.0, 3.0, st.session_state.file_custom_trua, 0.1)
+                st.session_state.file_custom_chieu = st.slider("File - Chiều:", 0.0, 3.0, st.session_state.file_custom_chieu, 0.1)
+                st.session_state.file_custom_dem = st.slider("File - Đêm:", 0.0, 3.0, st.session_state.file_custom_dem, 0.1)
             else:
                 f_tree = DANH_SACH_CAY[f_opt]
                 st.markdown(f"🔹 Ngưỡng động áp dụng: **Sáng** `{f_tree['Sang']}` | **Trưa** `{f_tree['Trua']}` | **Chiều** `{f_tree['Chieu']}` | **Đêm** `{f_tree['Dem']}`")
@@ -473,24 +483,29 @@ with tab_past:
                     st.download_button("📥 Xuất báo cáo chu kỳ (.csv)", data=df_p.to_csv(index=False).encode('utf-8'), file_name="vpd_report.csv", mime="text/csv", use_container_width=True)
 
                 st.markdown("---")
-                st.markdown("##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc)")
+                st.markdown("##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ")
                 if len(df_f_blk) > 0:
                     df_f_blk["Hour"] = df_f_blk["datetime_internal"].dt.hour
+                    
                     def b_assign(h):
-                        if 5 <= h < 10: return "🌅 Sáng (05h - 10h)"
-                        if 10 <= h < 15: return "☀️ Trưa (10h - 15h)"
-                        if 15 <= h < 19: return "🌇 Chiều (15h - 19h)"
-                        if 19 <= h < 23: return "🌌 Tối (19h - 23h)"
-                        return "🌙 Khuya (23h - 05h)"
+                        hs = st.session_state.h_sang
+                        ht = st.session_state.h_trua
+                        hc = st.session_state.h_chieu
+                        hd = st.session_state.h_dem
+                        if hs <= h < ht: return "🌅 Sáng"
+                        if ht <= h < hc: return "☀️ Trưa"
+                        if hc <= h < hd: return "🌇 Chiều"
+                        return "🌙 Đêm/Khuya"
+                        
                     df_f_blk["Buổi"] = df_f_blk["Hour"].apply(b_assign)
-                    b_sum = df_f_blk.groupby("Buổi").agg({"Nhiệt độ (°C)": "mean", "Độ ẩm (%)": "mean", "VPD_raw": "mean"}).reindex(["🌅 Sáng (05h - 10h)", "☀️ Trưa (10h - 15h)", "🌇 Chiều (15h - 19h)", "🌌 Tối (19h - 23h)", "🌙 Khuya (23h - 05h)"]).dropna(how="all").reset_index()
+                    b_sum = df_f_blk.groupby("Buổi").agg({"Nhiệt độ (°C)": "mean", "Độ ẩm (%)": "mean", "VPD_raw": "mean"}).reindex(["🌅 Sáng", "☀️ Trưa", "🌇 Chiều", "🌙 Đêm/Khuya"]).dropna(how="all").reset_index()
                     b_sum.columns = ["Khoảng thời gian", "Nhiệt độ TB (°C)", "Độ ẩm TB (%)", "VPD TB (kPa)"]
                     for c in ["Nhiệt độ TB (°C)", "Độ ẩm TB (%)", "VPD TB (kPa)"]: b_sum[c] = b_sum[c].round(2)
                     
                     def evaluate_block_row(row):
                         name = row["Khoảng thời gian"]
                         vpd = row["VPD TB (kPa)"]
-                        rep_hour = 7 if "Sáng" in name else (12 if "Trưa" in name else (17 if "Chiều" in name else 22))
+                        rep_hour = st.session_state.h_sang if "Sáng" in name else (st.session_state.h_trua if "Trưa" in name else (st.session_state.h_chieu if "Chiều" in name else st.session_state.h_dem))
                         v_min, v_max = get_current_vpd_range(f_opt, rep_hour, is_file=True)
                         if vpd < v_min: return "🟦 Quá ẩm"
                         elif vpd <= v_max: return "🟩 Lý tưởng"
@@ -499,6 +514,6 @@ with tab_past:
                     b_sum["Đánh giá"] = b_sum.apply(evaluate_block_row, axis=1)
                     st.dataframe(b_sum, use_container_width=True, hide_index=True)
             else:
-                st.warning("⚠️ Không có dữ liệu hợp lệ sau khi lọc theo các tiêu chí thời gian.")
+                st.warning("⚠️ Không có dữ liệu hợp lệ.")
         except Exception as file_err:
-            st.error(f"❌ Lỗi cấu trúc xử lý dữ liệu file: {str(file_err)}")
+            st.error(f"❌ Lỗi cấu trúc file: {str(file_err)}")
