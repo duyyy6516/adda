@@ -57,12 +57,12 @@ DANH_SACH_CAY = {
 }
 plant_list_keys = list(DANH_SACH_CAY.keys())
 
-# Khởi tạo Session State (Thêm cấu hình giờ động cho các buổi)
+# Khởi tạo Session State (Mốc chuyển giao giờ mặc định: 5h, 10h, 15h, 19h)
 CHAU_HINH_MAC_DINH = {
     "temp": 24.0, "rh": 75.0, "countdown": 15,
     "is_running": False, "is_completed": False, "history": [],
     "stt_counter": 0, "plant_idx": 0,
-    "h_sang": 5, "h_trua": 10, "h_chieu": 15, "h_dem": 19, # Mốc giờ cấu hình mặc định
+    "h_sang": 5, "h_trua": 10, "h_chieu": 15, "h_dem": 19,
     "custom_sang": (0.6, 1.1), "custom_trua": (0.8, 1.4), "custom_chieu": (0.7, 1.2), "custom_dem": (0.5, 0.9),
     "simulated_time": "2026-05-24 07:00:00", "file_plant_idx": 0,
     "file_custom_sang": (0.6, 1.1), "file_custom_trua": (0.8, 1.4), "file_custom_chieu": (0.7, 1.2), "file_custom_dem": (0.5, 0.9),
@@ -84,14 +84,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- HÀM ĐỊNH TUYẾN THEO MỐC GIỜ ĐỘNG NGƯỜI DÙNG CHỌN ---
+# --- HÀM TÍNH TOÁN THEO KHOẢNG GIỜ ĐỘNG ---
 def get_time_block_key(hour):
     hs = st.session_state.h_sang
     ht = st.session_state.h_trua
     hc = st.session_state.h_chieu
     hd = st.session_state.h_dem
     
-    # Kiểm tra vòng xoay giờ sinh học của cây
     if hs <= hour < ht:
         return "Sang"
     elif ht <= hour < hc:
@@ -211,14 +210,37 @@ def render_sidebar_controls():
                 st.session_state.is_running = False
                 st.rerun()
                 
-    # KHỐI ĐIỀU CHỈNH KHOẢNG THỜI GIAN ĐỘNG
+    # --- ĐÃ GỘP THÀNH THANH KÉO SLIDER CHỌN GIỜ THEO BUỔI ---
     with st.sidebar:
-        st.markdown("<h3 style='color:#1A5276;font-size:16px;'>⏱️ CẤU HÌNH KHUNG GIỜ BUỔI</h3>", unsafe_allow_html=True)
-        st.session_state.h_sang = st.slider("Bắt đầu Sáng (h):", 4, 8, st.session_state.h_sang)
-        st.session_state.h_trua = st.slider("Bắt đầu Trưa (h):", 9, 12, st.session_state.h_trua)
-        st.session_state.h_chieu = st.slider("Bắt đầu Chiều (h):", 13, 17, st.session_state.h_chieu)
-        st.session_state.h_dem = st.slider("Bắt đầu Đêm (h):", 18, 22, st.session_state.h_dem)
-        st.caption(f"📌 Khung hiện tại: Sáng ({st.session_state.h_sang}h-{st.session_state.h_trua}h) | Trưa ({st.session_state.h_trua}h-{st.session_state.h_chieu}h) | Chiều ({st.session_state.h_chieu}h-{st.session_state.h_dem}h) | Đêm ({st.session_state.h_dem}h-{st.session_state.h_sang}h)")
+        st.markdown("<h3 style='color:#1A5276;font-size:16px;'>⏱️ PHÂN CHIA KHOẢNG GIỜ CÁC BUỔI</h3>", unsafe_allow_html=True)
+        
+        # Thiết lập danh sách giờ hiển thị từ 00:00 -> 24:00
+        hours_list = [f"{i:02d}:00" for i in range(25)]
+        
+        # Tìm index tương ứng của các mốc giờ hiện tại để giữ vị trí slider
+        idx_s = st.session_state.h_sang
+        idx_t = st.session_state.h_trua
+        idx_c = st.session_state.h_chieu
+        idx_d = st.session_state.h_dem
+        
+        # Khởi tạo slider kéo khoảng giá trị (Multi-value Slider)
+        chosen_ranges = st.select_slider(
+            "Kéo mốc bắt đầu của Sáng ➜ Trưa ➜ Chiều ➜ Đêm:",
+            options=hours_list,
+            value=(hours_list[idx_s], hours_list[idx_t], hours_list[idx_c], hours_list[idx_v] if 'idx_v' in locals() else hours_list[idx_d])
+        )
+        
+        # Ép kiểu dữ liệu chuỗi thành số nguyên giờ (int)
+        st.session_state.h_sang = int(chosen_ranges[0].split(":")[0])
+        st.session_state.h_trua = int(chosen_ranges[1].split(":")[0])
+        st.session_state.h_chieu = int(chosen_ranges[2].split(":")[0])
+        if len(chosen_ranges) >= 4:
+            st.session_state.h_dem = int(chosen_ranges[3].split(":")[0])
+            
+        st.info(f"🌅 **Sáng:** {st.session_state.h_sang}h - {st.session_state.h_trua}h\n\n"
+                f"☀️ **Trưa:** {st.session_state.h_trua}h - {st.session_state.h_chieu}h\n\n"
+                f"🌇 **Chiều:** {st.session_state.h_chieu}h - {st.session_state.h_dem}h\n\n"
+                f"🌙 **Đêm:** {st.session_state.h_dem}h - {st.session_state.h_sang}h")
 
     with st.container(border=True):
         opt = st.selectbox("Cây trồng mô phỏng:", plant_list_keys, index=st.session_state.plant_idx, disabled=st.session_state.is_running)
@@ -311,7 +333,25 @@ def render_realtime_analytics_panel():
         st.altair_chart(draw_temp_humidity_combo_chart(df_f), use_container_width=True)
 
     with t2:
-        st.dataframe(analyze_day_by_blocks_rt(st.session_state.history, v_min_avg, v_max_avg, sel_day), use_container_width=True, hide_index=True)
+        df_block_analysis = analyze_day_by_blocks_rt(
+            st.session_state.history, 
+            st.session_state.h_sang,
+            st.session_state.h_trua,
+            st.session_state.h_chieu,
+            st.session_state.h_dem,
+            sel_day
+        )
+        if not df_block_analysis.empty:
+            def eval_rt_block(row):
+                v = row["VPD TB (kPa)"]
+                if v < v_min_avg: return "🟦 Quá ẩm"
+                elif v <= v_max_avg: return "🟩 Lý tưởng"
+                return "🟥 Quá khô"
+            df_block_analysis["Đánh giá sinh lý"] = df_block_analysis.apply(eval_rt_block, axis=1)
+            st.dataframe(df_block_analysis, use_container_width=True, hide_index=True)
+        else:
+            st.info("Chưa đủ điểm chu kỳ dữ liệu để kết xuất bảng tổng hợp buổi.")
+            
     with t3:
         df_f["Thời gian"] = df_f["Hiển thị Giờ"]
         st.dataframe(df_f[["STT", "Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]].style.apply(style_status_rows, axis=1), use_container_width=True, hide_index=True)
@@ -492,23 +532,20 @@ with tab_past:
                         ht = st.session_state.h_trua
                         hc = st.session_state.h_chieu
                         hd = st.session_state.h_dem
-                        if hs <= h < ht: return "🌅 Sáng"
-                        if ht <= h < hc: return "☀️ Trưa"
-                        if hc <= h < hd: return "🌇 Chiều"
-                        return "🌙 Đêm/Khuya"
+                        if hs <= h < ht: return f"🌅 Sáng ({hs:02d}h-{ht:02d}h)"
+                        if ht <= h < hc: return f"☀️ Trưa ({ht:02d}h-{hc:02d}h)"
+                        if hc <= h < hd: return f"🌇 Chiều ({hc:02d}h-{hd:02d}h)"
+                        return f"🌙 Đêm/Khuya ({hd:02d}h-{hs:02d}h)"
                         
                     df_f_blk["Buổi"] = df_f_blk["Hour"].apply(b_assign)
-                    b_sum = df_f_blk.groupby("Buổi").agg({"Nhiệt độ (°C)": "mean", "Độ ẩm (%)": "mean", "VPD_raw": "mean"}).reindex(["🌅 Sáng", "☀️ Trưa", "🌇 Chiều", "🌙 Đêm/Khuya"]).dropna(how="all").reset_index()
+                    b_sum = df_f_blk.groupby("Buổi").agg({"Nhiệt độ (°C)": "mean", "Độ ẩm (%)": "mean", "VPD_raw": "mean"}).reset_index()
                     b_sum.columns = ["Khoảng thời gian", "Nhiệt độ TB (°C)", "Độ ẩm TB (%)", "VPD TB (kPa)"]
                     for c in ["Nhiệt độ TB (°C)", "Độ ẩm TB (%)", "VPD TB (kPa)"]: b_sum[c] = b_sum[c].round(2)
                     
                     def evaluate_block_row(row):
-                        name = row["Khoảng thời gian"]
                         vpd = row["VPD TB (kPa)"]
-                        rep_hour = st.session_state.h_sang if "Sáng" in name else (st.session_state.h_trua if "Trưa" in name else (st.session_state.h_chieu if "Chiều" in name else st.session_state.h_dem))
-                        v_min, v_max = get_current_vpd_range(f_opt, rep_hour, is_file=True)
-                        if vpd < v_min: return "🟦 Quá ẩm"
-                        elif vpd <= v_max: return "🟩 Lý tưởng"
+                        if vpd < f_min_avg: return "🟦 Quá ẩm"
+                        elif vpd <= f_max_avg: return "🟩 Lý tưởng"
                         return "🟥 Quá khô"
                         
                     b_sum["Đánh giá"] = b_sum.apply(evaluate_block_row, axis=1)
