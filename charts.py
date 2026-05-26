@@ -11,7 +11,6 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
     df_chart['y_floor'] = 0.0
     df_chart['y_roof'] = 3.0
 
-    # Đã sửa 'Hiển thị Giờ' thành 'Thời gian'
     x_axis = alt.X(field='Thời gian', type='ordinal', title='Mốc thời gian chu kỳ', sort=None)
 
     bg_under = alt.Chart(df_chart).mark_area(color='#E3F2FD', opacity=0.8).encode(
@@ -37,7 +36,6 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         y=alt.Y(field='VPD (kPa)', type='quantitative', title='VPD (kPa)', scale=alt.Scale(domain=[0, 2.5]))
     )
     
-    # Đã sửa 'Hiển thị Giờ' thành 'Thời gian' trong tooltip
     vpd_points = alt.Chart(df_chart).mark_circle(color='#1B5E20', size=70).encode(
         x=x_axis,
         y=alt.Y(field='VPD (kPa)', type='quantitative'),
@@ -46,14 +44,13 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
 
     return alt.layer(bg_under, bg_ideal, bg_over, vpd_line, vpd_points).properties(height=280).interactive()
 
+
 def draw_temp_humidity_combo_chart(df):
     """Vẽ đồ thị Nhiệt độ & Độ ẩm chung một trục X từ trái sang phải, tách biệt trục Y trái/phải chính xác"""
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
         
     df_chart = df.copy()
-    
-    # Đã sửa 'Hiển thị Giờ' thành 'Thời gian'
     x_axis = alt.X(field='Thời gian', type='ordinal', title='Mốc thời gian', sort=None)
     
     # Trục Y bên trái: Nhiệt độ
@@ -61,8 +58,6 @@ def draw_temp_humidity_combo_chart(df):
         x=x_axis,
         y=alt.Y(field='Nhiệt độ (°C)', type='quantitative', title='Nhiệt độ (°C)', axis=alt.Axis(titleColor='#FF4B4B'))
     )
-    
-    # Đã sửa 'Hiển thị Giờ' thành 'Thời gian' trong tooltip
     temp_points = alt.Chart(df_chart).mark_circle(color='#FF4B4B', size=50).encode(
         x=x_axis,
         y=alt.Y(field='Nhiệt độ (°C)', type='quantitative'),
@@ -74,8 +69,6 @@ def draw_temp_humidity_combo_chart(df):
         x=x_axis,
         y=alt.Y(field='Độ ẩm (%)', type='quantitative', title='Độ ẩm (%)', axis=alt.Axis(titleColor='#0068C9')),
     )
-    
-    # Đã sửa 'Hiển thị Giờ' thành 'Thời gian' trong tooltip
     hum_points = alt.Chart(df_chart).mark_circle(color='#0068C9', size=50).encode(
         x=x_axis,
         y=alt.Y(field='Độ ẩm (%)', type='quantitative'),
