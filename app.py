@@ -74,7 +74,6 @@ if uploaded_file is not None and not st.session_state.is_running:
         raw_data = json.load(uploaded_file)
         parsed_history = []
         for item in raw_data:
-            # Chuyển đổi chuỗi ngược lại thành datetime nội bộ an toàn
             dt_obj = datetime.strptime(item["Thời điểm (Mô phỏng)"], "%d/%m/%Y %H:%M")
             parsed_history.append({
                 "Thời điểm (Mô phỏng)": item["Thời điểm (Mô phỏng)"],
@@ -86,7 +85,6 @@ if uploaded_file is not None and not st.session_state.is_running:
                 "Trạng thái": item["Trạng thái"],
                 "Hiển thị Giờ": dt_obj.strftime("%H:%M")
             })
-        # Sắp xếp lịch sử theo thời gian mới nhất lên đầu
         parsed_history.sort(key=lambda x: x["datetime_internal"], reverse=True)
         st.session_state.history = parsed_history
         if parsed_history:
@@ -108,11 +106,9 @@ with col_ctrl1:
         st.session_state.sim_time += timedelta(hours=1)
         st.session_state.is_running = True
         
-        # Lấy thời tiết mô phỏng và tính VPD
         t_sim, h_sim = get_weather_by_time(st.session_state.sim_time)
         v_sim = round(calculate_vpd(t_sim, h_sim), 2)
         
-        # Xác định trạng thái
         if v_sim < vpd_min:
             stat_sim = "⚠️ Quá ẩm"
         elif v_sim > vpd_max:
@@ -130,8 +126,6 @@ with col_ctrl1:
             "Trạng thái": stat_sim,
             "Hiển thị Giờ": st.session_state.sim_time.strftime("%H:%M")
         }
-        
-        # Thêm vào đầu danh sách lịch sử để phục vụ phân tích độ dốc của v3
         st.session_state.history.insert(0, new_entry)
 
 with col_ctrl2:
@@ -142,7 +136,6 @@ with col_ctrl2:
         st.rerun()
 
 with col_ctrl3:
-    # Nút bấm tính năng mở rộng: Mô phỏng kẹt lỗi đứng im dữ liệu để test thuật toán v3
     if st.button("🚨 Giả lập lỗi kẹt cảm biến", use_container_width=True):
         if len(st.session_state.history) > 0:
             st.session_state.sim_time += timedelta(hours=1)
@@ -199,7 +192,6 @@ if st.session_state.history:
         else:
             st.success(trend_msg)
             
-        # Tự động gửi cảnh báo nếu phát hiện nguy cơ bất thường và có cài đặt cấu hình Bot Telegram
         if trend_code in ["danger_stuck", "danger_high", "danger_low"] and bot_token and chat_id:
             alert_text = f"🚨 **CẢNH BÁO VPD CÂY TRỒNG ({loai_cay})**\n⏰ Thời gian: {cur_data['Thời điểm (Mô phỏng)']}\n📈 VPD Hiện tại: {cur_data['VPD (kPa)']} kPa\n🔍 Phân tích hệ thống: {trend_msg}"
             success = send_telegram_message(bot_token, chat_id, alert_text)
@@ -209,7 +201,6 @@ if st.session_state.history:
     with col_an2:
         st.markdown("##### 🕒 Quản lý Số giờ tích lũy Căng thẳng của Cây (Stress Hours)")
         df_for_stress = pd.DataFrame(st.session_state.history)
-        # Ép kiểu dữ liệu an toàn
         df_for_stress["VPD (kPa)"] = df_for_stress["VPD (kPa)"].astype(float)
         stress_h = calculate_plant_stress_hours(df_for_stress, vpd_min, vpd_max)
         
@@ -218,15 +209,13 @@ if st.session_state.history:
         else:
             st.markdown(f"<div style='color: #388E3C; font-size: 16px; font-weight: bold;'>✅ Tổng số giờ áp lực stress trong chu kỳ: {stress_h} giờ. Cây đang nằm trong ngưỡng chịu đựng tốt.</div>", unsafe_allow_html=True)
             
-        # Đưa ra giải pháp nhanh xử lý vi khí hậu thời gian thực
         quick_sol = get_quick_solution(cur_data['VPD (kPa)'], vpd_min, vpd_max, cur_data['datetime_internal'].hour)
         st.markdown(f"💡 **Khuyến nghị vận hành:** {quick_sol}")
 
-    # 3. ĐỒ THỊ TRỰC QUAN HÓA (Đã đổi từ 3 đồ thị rời sang 2 đồ thị: Gộp + VPD mục tiêu)
+    # 3. ĐỒ THỊ TRỰC QUAN HÓA (2 cột: Biểu đồ Gộp bên trái và Biểu đồ VPD bên phải)
     st.markdown("---")
     st.markdown("### 📉 Đồ thị theo dõi Biến động Dữ liệu Lịch sử")
     
-    # Chuẩn bị dữ liệu vẽ đồ thị (đảo ngược lại để hiển thị mốc thời gian xuôi dòng từ trái qua phải)
     df_chart_source = pd.DataFrame(st.session_state.history).iloc[::-1].reset_index(drop=True)
     
     col_g1, col_g2 = st.columns([1, 1])
@@ -237,15 +226,13 @@ if st.session_state.history:
         st.markdown("<p style='text-align: center; font-weight: bold; color: #2E7D32;'>Biểu đồ Dải An Toàn VPD Mục Tiêu</p>", unsafe_allow_html=True)
         st.altair_chart(draw_vpd_chart(df_chart_source, vpd_min, vpd_max), use_container_width=True)
 
-    # 4. KHỐI HIỂN THỊ BẢNG BIỂU TUẦN TỰ XẾP BÊN DƯỚI ĐỒ THỊ
-    # Chuẩn bị dữ liệu xử lý chu kỳ cho thuật toán
+    # 4. KHỐI HIỂN THỊ BẢNG BIỂU TUẦN TỰ XẾP BÊN DƯỚI ĐỒ THỊ (Đã bỏ st.tabs)
     df_f_blk = pd.DataFrame(st.session_state.history)
 
     # --- BÁO CÁO THEO BUỔI ---
     st.markdown("---")
     st.markdown("##### 📊 BÁO CÁO PHÂN TÍCH TỔNG HỢP THEO BUỔI CHU KỲ (Dữ liệu gốc)")
     
-    # Gọi hàm xử lý phân đoạn từ module analytics của bạn để tính toán chính xác
     blk_report = analyze_day_by_blocks_rt(df_f_blk, vpd_min, vpd_max)
     if blk_report:
         st.dataframe(pd.DataFrame(blk_report), use_container_width=True, hide_index=True)
@@ -264,7 +251,6 @@ if st.session_state.history:
         # --- KHỐI TẢI XUẤT FILE NÂNG CAO ---
         col_down1, col_down2 = st.columns(2)
         with col_down1:
-            # Tạo file sao lưu cấu hình dạng JSON
             clean_json_list = []
             for _, r in df_display.iterrows():
                 clean_json_list.append({
