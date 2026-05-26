@@ -11,7 +11,7 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
     df_chart['y_floor'] = 0.0
     df_chart['y_roof'] = 3.0
 
-    x_axis = alt.X(field='Thời gian', type='ordinal', title='Mốc thời gian chu kỳ', sort=None)
+    x_axis = alt.X(field='Hiển thị Giờ', type='ordinal', title='Mốc thời gian chu kỳ', sort=None)
 
     bg_under = alt.Chart(df_chart).mark_area(color='#E3F2FD', opacity=0.8).encode(
         x=x_axis,
@@ -30,30 +30,21 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
         y=alt.Y(field='y_max_bound', type='quantitative'),
         y2=alt.Y2(field='y_roof')
     )
-
-    vpd_line = alt.Chart(df_chart).mark_line(color='#2E7D32', strokeWidth=3.5).encode(
+    
+    line = alt.Chart(df_chart).mark_line(color='#1E1E1E', strokeWidth=3, point=True).encode(
         x=x_axis,
-        y=alt.Y(field='VPD (kPa)', type='quantitative', title='VPD (kPa)', scale=alt.Scale(domain=[0, 2.5]))
+        y=alt.Y(field='VPD (kPa)', type='quantitative', title='Giá trị VPD (kPa)', scale=alt.Scale(domain=[0.0, 2.5]))
     )
     
-    vpd_points = alt.Chart(df_chart).mark_circle(color='#1B5E20', size=70).encode(
-        x=x_axis,
-        y=alt.Y(field='VPD (kPa)', type='quantitative'),
-        tooltip=['Thời gian', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
-    )
-
-    return alt.layer(bg_under, bg_ideal, bg_over, vpd_line, vpd_points).properties(height=280).interactive()
-
+    return alt.layer(bg_under, bg_ideal, bg_over, line).properties(height=350)
 
 def draw_temp_humidity_combo_chart(df):
-    """Vẽ đồ thị Nhiệt độ & Độ ẩm chung một trục X từ trái sang phải, tách biệt trục Y trái/phải chính xác"""
     if df.empty:
         return alt.Chart(pd.DataFrame()).mark_blank()
         
     df_chart = df.copy()
-    x_axis = alt.X(field='Thời gian', type='ordinal', title='Mốc thời gian', sort=None)
+    x_axis = alt.X(field='Hiển thị Giờ', type='ordinal', title='Mốc thời gian', sort=None)
     
-    # Trục Y bên trái: Nhiệt độ
     temp_line = alt.Chart(df_chart).mark_line(color='#FF4B4B', strokeWidth=2.5).encode(
         x=x_axis,
         y=alt.Y(field='Nhiệt độ (°C)', type='quantitative', title='Nhiệt độ (°C)', axis=alt.Axis(titleColor='#FF4B4B'))
@@ -61,10 +52,9 @@ def draw_temp_humidity_combo_chart(df):
     temp_points = alt.Chart(df_chart).mark_circle(color='#FF4B4B', size=50).encode(
         x=x_axis,
         y=alt.Y(field='Nhiệt độ (°C)', type='quantitative'),
-        tooltip=['Thời gian', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'Trạng thái']
+        tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)']
     )
     
-    # Trục Y bên phải: Độ ẩm
     hum_line = alt.Chart(df_chart).mark_line(color='#0068C9', strokeWidth=2.5).encode(
         x=x_axis,
         y=alt.Y(field='Độ ẩm (%)', type='quantitative', title='Độ ẩm (%)', axis=alt.Axis(titleColor='#0068C9')),
@@ -72,14 +62,7 @@ def draw_temp_humidity_combo_chart(df):
     hum_points = alt.Chart(df_chart).mark_circle(color='#0068C9', size=50).encode(
         x=x_axis,
         y=alt.Y(field='Độ ẩm (%)', type='quantitative'),
-        tooltip=['Thời gian', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'Trạng thái']
+        tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)']
     )
     
-    chart = alt.layer(
-        alt.layer(temp_line, temp_points),
-        alt.layer(hum_line, hum_points)
-    ).resolve_scale(
-        y='independent'
-    ).properties(height=240)
-    
-    return chart
+    return alt.layer(temp_line + temp_points, hum_line + hum_points).resolve_scale(y='independent').properties(height=350)
