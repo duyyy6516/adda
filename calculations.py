@@ -2,7 +2,7 @@ import math
 import random
 
 def calculate_vpd(temp, rh):
-    """Tính toán chỉ số áp suất hơi thâm hụt (VPD)"""
+    """Tính toán chỉ số áp suất hơi thâm hụt (VPD) theo chuẩn khí tượng thế giới"""
     if temp == 0 and rh == 0:
         return 0.0
     vp_sat = 0.61078 * math.exp((17.27 * temp) / (temp + 237.3))
