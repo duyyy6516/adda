@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-import sys
-import os
 
 # Import các hàm từ các file bạn đã cung cấp
 from calculations import calculate_vpd, get_weather_by_time
@@ -65,32 +63,33 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- KHỞI TẠO SESSION STATE ---
+# --- KHỞI TẠO SESSION STATE CHUẨN ---
 DANH_SACH_CAY = {
     "🍓 Dâu tây Đà Lạt (Hoa / Trái)": {"Sang": (0.6, 0.9), "Trua": (0.8, 1.2), "Chieu": (0.7, 1.0), "Dem": (0.4, 0.7)},
     "🛠️ Tùy chỉnh thủ công ngưỡng riêng": {"Sang": (0.6, 1.1), "Trua": (0.8, 1.4), "Chieu": (0.7, 1.2), "Dem": (0.5, 0.9)}
 }
 
-if 'history' not in st.session_state:
-    st.session_state.update({
-        "temp": 24.0, "rh": 75.0, "countdown": 15, "is_running": False,
-        "history": [], "stt_counter": 0, "plant_idx": 0,
-        "h_sang": 5, "h_trua": 10, "h_chieu": 15, "h_dem": 19,
-        "simulated_time": "2026-05-24 07:00:00",
-        "custom_thresholds": {"Sang": (0.6, 0.9), "Trua": (0.8, 1.2), "Chieu": (0.7, 1.0), "Dem": (0.4, 0.7)}
-    })
+default_states = {
+    "temp": 24.0, "rh": 75.0, "countdown": 15, "is_running": False,
+    "history": [], "stt_counter": 0, "plant_idx": 0,
+    "h_sang": 5, "h_trua": 10, "h_chieu": 15, "h_dem": 19,
+    "simulated_time": "2026-05-24 07:00:00",
+    "custom_thresholds": {"Sang": (0.6, 0.9), "Trua": (0.8, 1.2), "Chieu": (0.7, 1.0), "Dem": (0.4, 0.7)}
+}
+
+for key, value in default_states.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 # --- LOGIC HỖ TRỢ ---
 def get_current_thresholds(hour):
     plant_name = list(DANH_SACH_CAY.keys())[st.session_state.plant_idx]
     if plant_name == "🛠️ Tùy chỉnh thủ công ngưỡng riêng":
-        # Lấy từ slider tùy chỉnh
         if st.session_state.h_sang <= hour < st.session_state.h_trua: return st.session_state.custom_thresholds["Sang"]
         if st.session_state.h_trua <= hour < st.session_state.h_chieu: return st.session_state.custom_thresholds["Trua"]
         if st.session_state.h_chieu <= hour < st.session_state.h_dem: return st.session_state.custom_thresholds["Chieu"]
         return st.session_state.custom_thresholds["Dem"]
     else:
-        # Lấy theo thư viện cây
         if st.session_state.h_sang <= hour < st.session_state.h_trua: return DANH_SACH_CAY[plant_name]["Sang"]
         if st.session_state.h_trua <= hour < st.session_state.h_chieu: return DANH_SACH_CAY[plant_name]["Trua"]
         if st.session_state.h_chieu <= hour < st.session_state.h_dem: return DANH_SACH_CAY[plant_name]["Chieu"]
@@ -141,7 +140,6 @@ with col_sidebar:
 
     st.markdown("<div class='section-header'>🎯 NGƯỠNG VPD THEO BUỔI</div>", unsafe_allow_html=True)
     with st.container(border=True):
-        # Slider dải cho từng buổi (giống ảnh)
         st.session_state.custom_thresholds["Sang"] = st.slider("Sáng (kPa):", 0.0, 2.0, st.session_state.custom_thresholds["Sang"], 0.1)
         st.session_state.custom_thresholds["Trua"] = st.slider("Trưa (kPa):", 0.0, 2.0, st.session_state.custom_thresholds["Trua"], 0.1)
         st.session_state.custom_thresholds["Chieu"] = st.slider("Chiều (kPa):", 0.0, 2.0, st.session_state.custom_thresholds["Chieu"], 0.1)
@@ -155,7 +153,6 @@ with col_sidebar:
         st.session_state.history = []
         st.rerun()
 
-    # Fragment cập nhật dữ liệu
     @st.fragment(run_every=1)
     def update_logic():
         if st.session_state.is_running:
@@ -166,7 +163,6 @@ with col_sidebar:
 
     update_logic()
 
-    # HIỂN THỊ REALTIME (Card giống ảnh)
     st.markdown("<div class='section-header'>📊 THÔNG SỐ HIỆN TẠI</div>", unsafe_allow_html=True)
     with st.container(border=True):
         cur_sim_dt = datetime.strptime(st.session_state.simulated_time, "%Y-%m-%d %H:%M:%S")
@@ -179,7 +175,6 @@ with col_sidebar:
         vpd_now = calculate_vpd(st.session_state.temp, st.session_state.rh)
         v_min, v_max = get_current_thresholds(cur_sim_dt.hour)
         
-        # Thẻ VPD lớn
         st.markdown(f"""
             <div class="vpd-card">
                 <div style="font-size:14px; color:#666;">CHỈ SỐ VPD THỰC TẾ</div>
@@ -187,7 +182,6 @@ with col_sidebar:
             </div>
         """, unsafe_allow_html=True)
 
-        # Trạng thái & Giải pháp
         if vpd_now < v_min:
             st.markdown(f"<div class='solution-box solution-wet'>🟦 Stress Ẩm: {get_quick_solution(vpd_now, v_min, v_max, cur_sim_dt.hour)}</div>", unsafe_allow_html=True)
         elif vpd_now > v_max:
@@ -203,23 +197,20 @@ with col_main:
         df = pd.DataFrame(st.session_state.history)
         df_display = df.sort_values("datetime_internal")
         
-        # 1. Biểu đồ VPD
         v_min_avg = df["V_Min"].mean()
         v_max_avg = df["V_Max"].mean()
         st.altair_chart(draw_vpd_chart(df_display, v_min_avg, v_max_avg), use_container_width=True)
         
-        # 2. Bảng tổng hợp buổi (Realtime)
         st.markdown("<div class='section-header'>📊 BẢNG ĐÁNH GIÁ CHUNG THEO BUỔI</div>", unsafe_allow_html=True)
         summary_df = analyze_day_by_blocks_rt(st.session_state.history, v_min_avg, v_max_avg, df["Ngày"].iloc[0])
         st.table(summary_df)
 
-        # 3. Bảng nhật ký chi tiết
         st.markdown("<div class='section-header'>📋 NHẬT KÝ CHI TIẾT ĐIỂM DỮ LIỆU</div>", unsafe_allow_html=True)
         st.dataframe(df[["STT", "Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "VPD (kPa)", "Trạng thái"]], use_container_width=True, hide_index=True)
     else:
         st.info("Chưa có dữ liệu mô phỏng. Nhấn 'Bắt đầu' để bắt đầu chu kỳ.")
 
-# --- FOOTER CẢNH BÁO (Giống ảnh) ---
+# --- FOOTER CẢNH BÁO ---
 if st.session_state.history:
     last_vpd = st.session_state.history[0]["VPD (kPa)"]
     v_min, v_max = st.session_state.history[0]["V_Min"], st.session_state.history[0]["V_Max"]
