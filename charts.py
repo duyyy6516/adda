@@ -24,106 +24,71 @@ def draw_vpd_chart(df, vpd_min, vpd_max):
     
     bg_ideal = alt.Chart(df_chart).mark_area(color='#E8F5E9', opacity=0.8).encode(
         x=x_axis,
-        y=alt.Y(field='y_min_bound', type='quantitative', title='Áp suất hơi thâm hụt VPD (kPa)'),
+        y=alt.Y(field='y_min_bound', type='quantitative'),
         y2=alt.Y2(field='y_max_bound')
     )
     
-    bg_over = alt.Chart(df_chart).mark_area(color='#FFF3E0', opacity=0.8).encode(
+    bg_over = alt.Chart(df_chart).mark_area(color='#FFEBEE', opacity=0.8).encode(
         x=x_axis,
         y=alt.Y(field='y_max_bound', type='quantitative'),
         y2=alt.Y2(field='y_roof')
     )
 
-    # 4. Vẽ đường giá trị VPD thực tế chạy đè lên dải nền
-    line_actual = alt.Chart(df_chart).mark_line(color='#2E7D32', strokeWidth=3, point=alt.OverlayMarkDef(color='#1B5E20', size=60)).encode(
+    # 4. Vẽ đường đồ thị chính và các điểm tròn tương tác Tooltip
+    line = alt.Chart(df_chart).mark_line(color='#2E7D32', strokeWidth=3.5).encode(
+        x=x_axis,
+        y=alt.Y(field='VPD (kPa)', type='quantitative', title='Chỉ số VPD (kPa)', scale=alt.Scale(domain=[0, 3.0], clamp=True))
+    )
+    
+    points = alt.Chart(df_chart).mark_circle(color='#1B5E20', size=70).encode(
         x=x_axis,
         y=alt.Y(field='VPD (kPa)', type='quantitative'),
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
     )
 
-    # 5. Lồng ghép các tầng bản đồ trực quan bằng toán tử Layer của Altair
-    final_chart = alt.layer(bg_under, bg_ideal, bg_over, line_actual).properties(
-        height=180
-    ).interactive()
-
-    return final_chart.configure_axis(labelAngle=0)
+    return alt.layer(bg_under, bg_ideal, bg_over, line, points).properties(height=220).interactive().configure_axis(labelAngle=0)
 
 
-def draw_temperature_chart(df):
+def draw_temp_humidity_combo_chart(df):
     if df.empty: 
         return alt.Chart(pd.DataFrame()).mark_blank()
     
+    # Trục X dùng chung
     x_axis = alt.X(field='Hiển thị Giờ', type='ordinal', title='Mốc thời gian', sort=None)
     
-    line = alt.Chart(df).mark_line(color='#FF4B4B', strokeWidth=2.5).encode(
+    # 1. Trục Y bên trái (Nhiệt độ - Màu đỏ)
+    temp_line = alt.Chart(df).mark_line(color='#FF4B4B', strokeWidth=2.5).encode(
         x=x_axis,
-        y=alt.Y(field='Nhiệt độ (°C)', type='quantitative', title='Nhiệt độ (°C)')
+        y=alt.Y(field='Nhiệt độ (°C)', type='quantitative', 
+                title='Nhiệt độ (°C)', 
+                axis=alt.Axis(titleColor='#FF4B4B', labelColor='#FF4B4B'))
     )
-    
-    points = alt.Chart(df).mark_circle(color='#B71C1C', size=60).encode(
+    temp_points = alt.Chart(df).mark_circle(color='#B71C1C', size=60).encode(
         x=x_axis,
         y=alt.Y(field='Nhiệt độ (°C)', type='quantitative'),
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
     )
+    temp_chart = alt.layer(temp_line, temp_points)
     
-    return alt.layer(line, points).properties(height=180).interactive().configure_axis(labelAngle=0)
-
-
-def draw_humidity_chart(df):
-    if df.empty: 
-        return alt.Chart(pd.DataFrame()).mark_blank()
-    
-    x_axis = alt.X(field='Hiển thị Giờ', type='ordinal', title='Mốc thời gian', sort=None)
-    
-    line = alt.Chart(df).mark_line(color='#0068C9', strokeWidth=2.5).encode(
+    # 2. Trục Y bên phải (Độ ẩm - Màu xanh dương)
+    hum_line = alt.Chart(df).mark_line(color='#0068C9', strokeWidth=2.5).encode(
         x=x_axis,
-        y=alt.Y(field='Độ ẩm (%)', type='quantitative', title='Độ ẩm (%)')
+        y=alt.Y(field='Độ ẩm (%)', type='quantitative', 
+                title='Độ ẩm (%)', 
+                axis=alt.Axis(titleColor='#0068C9', labelColor='#0068C9'))
     )
-    
-    points = alt.Chart(df).mark_circle(color='#0D47A1', size=60).encode(
+    hum_points = alt.Chart(df).mark_circle(color='#0D47A1', size=60).encode(
         x=x_axis,
         y=alt.Y(field='Độ ẩm (%)', type='quantitative'),
         tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
     )
+    hum_chart = alt.layer(hum_line, hum_points)
     
-    return alt.layer(line, points).properties(height=180).interactive().configure_axis(labelAngle=0)
-
-
-def draw_combined_temp_humidity_chart(df):
-    """
-    Gộp biểu đồ Nhiệt độ và Độ ẩm lồng nhau (Dual Axis) xuất phát từ trục bên trái
-    """
-    if df.empty:
-        return alt.Chart(pd.DataFrame()).mark_blank()
-
-    x_axis = alt.X(field='Hiển thị Giờ', type='ordinal', title='Mốc thời gian', sort=None)
-
-    # Đường và điểm cho Nhiệt độ (Trục Y bên trái)
-    base_temp = alt.Chart(df).encode(x=x_axis)
-    line_temp = base_temp.mark_line(color='#FF4B4B', strokeWidth=2.5).encode(
-        y=alt.Y(field='Nhiệt độ (°C)', type='quantitative', title='Nhiệt độ (°C)', axis=alt.Axis(titleColor='#FF4B4B'))
-    )
-    points_temp = base_temp.mark_circle(color='#B71C1C', size=50).encode(
-        y=alt.Y(field='Nhiệt độ (°C)', type='quantitative'),
-        tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
-    )
-    chart_temp = alt.layer(line_temp, points_temp)
-
-    # Đường và điểm cho Độ ẩm (Trục Y bên phải song song độc lập)
-    base_humidity = alt.Chart(df).encode(x=x_axis)
-    line_humidity = base_humidity.mark_line(color='#0068C9', strokeWidth=2.5).encode(
-        y=alt.Y(field='Độ ẩm (%)', type='quantitative', title='Độ ẩm (%)', axis=alt.Axis(titleColor='#0068C9'))
-    )
-    points_humidity = base_humidity.mark_circle(color='#0D47A1', size=50).encode(
-        y=alt.Y(field='Độ ẩm (%)', type='quantitative'),
-        tooltip=['Hiển thị Giờ', 'Nhiệt độ (°C)', 'Độ ẩm (%)', 'VPD (kPa)', 'Trạng thái']
-    )
-    chart_humidity = alt.layer(line_humidity, points_humidity)
-
-    # Kết hợp hai đồ thị lồng nhau với hai trục độc lập
-    combined = alt.independent_charts(
-        chart_temp + chart_humidity,
+    # 3. Lồng 2 biểu đồ vào nhau với trục Y độc lập
+    combo_chart = alt.layer(temp_chart, hum_chart).resolve_scale(
         y='independent'
-    ).properties(height=180).interactive()
-
-    return combined.configure_axis(labelAngle=0)
+    ).properties(
+        height=220
+    ).interactive().configure_axis(labelAngle=0)
+    
+    return combo_chart
